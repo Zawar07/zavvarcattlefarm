@@ -254,7 +254,7 @@ export default function Expenses() {
       {/* ── FAB ────────────────────────────────────────────────── */}
       <button
         onClick={() => router.push('/expenses/new')}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-primary-950 hover:bg-primary-900 rounded-xl shadow-fab flex items-center justify-center text-white z-30"
+        className="fixed bottom-6 right-4 w-14 h-14 bg-primary-950 hover:bg-primary-900 rounded-xl shadow-fab flex items-center justify-center text-white z-30"
         aria-label="Add new expense"
       >
         <PlusIcon />

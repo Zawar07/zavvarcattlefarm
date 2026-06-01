@@ -8,7 +8,7 @@ export async function uploadReceipt(
   const filename = `receipts/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
   const { url } = await put(filename, buffer, {
-    access: 'public',
+    access: 'private',
     contentType: getMimeType(ext),
     token: process.env.BLOB_READ_WRITE_TOKEN,
   });

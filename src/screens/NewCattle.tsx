@@ -32,6 +32,7 @@ export default function NewCattle() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -51,10 +52,14 @@ export default function NewCattle() {
       if (imageFile) form.append('receipt', imageFile);   // field name 'receipt' matches parseForm
       return api.post('/cattle', form, { headers: { 'Content-Type': 'multipart/form-data' } });
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['cattle'] });
       queryClient.invalidateQueries({ queryKey: ['cattle-summary'] });
       queryClient.invalidateQueries({ queryKey: ['bank-balance'] });
+      if (res.data.warning === 'LOW_BALANCE') {
+        setWarning('⚠️ Bank balance is now negative. Please update the balance.');
+        return;
+      }
       router.push('/cattle');
     },
     onError: (err: unknown) => {
@@ -66,6 +71,7 @@ export default function NewCattle() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setWarning('');
     if (!price || parseFloat(price) <= 0) { setError('Valid purchase price is required.'); return; }
     mutation.mutate();
   };
@@ -76,7 +82,7 @@ export default function NewCattle() {
     <Layout title="Register Purchase" showBack showViewToggle={false}>
       <form onSubmit={handleSubmit} className="p-4 space-y-5">
         {error && <ErrorBanner message={error} onDismiss={() => setError('')} />}
-
+        {warning && <ErrorBanner message={warning} onDismiss={() => setWarning('')} />}
         {/* ── Animal Type Grid ─────────────────────────────────────────── */}
         <div>
           <label className="label">Animal Type *</label>

@@ -29,18 +29,32 @@ export async function parseForm(req: NextRequest): Promise<ParsedForm> {
     let file: ParsedFile | undefined;
 
     for (const [key, value] of formData.entries()) {
-      if (value instanceof File && value.size > 0) {
-        const buffer = Buffer.from(await value.arrayBuffer());
-        file = {
-          buffer,
-          originalname: value.name,
-          mimetype: value.type,
-        };
-      } else if (typeof value === 'string') {
+      if (value instanceof File) {
+        // Only capture non-empty files; skip empty file inputs
+        if (value.size > 0) {
+          const buffer = Buffer.from(await value.arrayBuffer());
+          file = {
+            buffer,
+            originalname: value.name || 'upload',
+            mimetype: value.type || 'application/octet-stream',
+          };
+        }
+        // Don't add File entries to fields — they're not string values
+      } else {
         fields[key] = value;
       }
     }
     return { fields, file };
+  }
+
+  // Fallback: try to parse as URL-encoded form
+  if (contentType.includes('application/x-www-form-urlencoded')) {
+    const text = await req.text().catch(() => '');
+    const fields: Record<string, string> = {};
+    for (const [key, value] of new URLSearchParams(text)) {
+      fields[key] = value;
+    }
+    return { fields };
   }
 
   return { fields: {} };

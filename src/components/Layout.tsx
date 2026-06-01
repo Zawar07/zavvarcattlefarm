@@ -7,10 +7,50 @@ import logo1 from '../assets/ZCF1.png';
 
 // Figma bottom nav: Dashboard | Expenses | Inventory | Ledger
 const NAV_TABS = [
-  { path: '/',         label: 'Dashboard' },
-  { path: '/expenses', label: 'Expenses'  },
-  { path: '/cattle',   label: 'Inventory' },
-  { path: '/ledger',   label: 'Ledger'    },
+  {
+    path: '/',
+    label: 'Dashboard',
+    icon: (active: boolean) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+    ),
+  },
+  {
+    path: '/expenses',
+    label: 'Expenses',
+    icon: (active: boolean) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+      </svg>
+    ),
+  },
+  {
+    path: '/cattle',
+    label: 'Inventory',
+    icon: (active: boolean) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+    ),
+  },
+  {
+    path: '/ledger',
+    label: 'Ledger',
+    icon: (active: boolean) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+      </svg>
+    ),
+  },
 ];
 
 const FINANCIAL_ROUTES = ['/', '/expenses', '/cattle', '/employees', '/ledger', '/reports'];
@@ -88,17 +128,18 @@ export default function Layout({ children, title, showViewToggle, showBack, head
       {/* Main Content — scrollable area between header and nav */}
       <main
         className="flex-1 overflow-y-auto overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', paddingBottom: '4rem' }}
+        style={{ WebkitOverflowScrolling: 'touch', paddingBottom: '5rem' }}
       >
         {children}
       </main>
 
       {/* ── Bottom Navigation Bar ──────────────────────────────── */}
       <nav
-        className="flex-shrink-0 w-full bg-surface-page border-t border-surface-border safe-bottom z-40"
+        className="flex-shrink-0 w-full bg-surface-page border-t border-surface-border z-40"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         aria-label="Main navigation"
       >
-        <div className="flex items-center justify-around px-4 h-11">
+        <div className="flex items-center justify-around px-4 h-14">
           {NAV_TABS.map(tab => {
             const isActive = tab.path === '/'
               ? pathname === '/'
@@ -110,6 +151,7 @@ export default function Layout({ children, title, showViewToggle, showBack, head
                 className={`nav-tab flex-1 py-1 ${isActive ? 'active' : ''}`}
                 aria-current={isActive ? 'page' : undefined}
               >
+                {tab.icon(isActive)}
                 <span className="text-[10px] font-medium">{tab.label}</span>
               </button>
             );

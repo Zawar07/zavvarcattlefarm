@@ -1,0 +1,191 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+
+  --color-primary-50: #f0fdf4;
+  --color-primary-100: #dcfce7;
+  --color-primary-200: #bbf7d0;
+  --color-primary-300: #86af99;
+  --color-primary-400: #4ade80;
+  --color-primary-500: #22c55e;
+  --color-primary-600: #16a34a;
+  --color-primary-700: #15803d;
+  --color-primary-800: #166534;
+  --color-primary-900: #1b4332;
+  --color-primary-950: #012d1d;
+
+  --color-surface-page: #f8f9fa;
+  --color-surface-card: #ffffff;
+  --color-surface-muted: #f3f4f5;
+  --color-surface-subtle: #edeeef;
+  --color-surface-input: #e7e8e9;
+  --color-surface-border: #c1c8c2;
+
+  --color-ink: #191c1d;
+  --color-ink-secondary: #414844;
+  --color-ink-muted: #717973;
+  --color-ink-brand: #79573a;
+
+  --color-status-available: #dcfce7;
+  --color-status-available-text: #166534;
+  --color-status-sold: #ffdcc1;
+  --color-status-sold-text: #5f4025;
+  --color-status-profit: #15803d;
+  --color-status-loss: #ba1a1a;
+
+  --shadow-card: 0px 1px 2px 0px rgba(0, 0, 0, 0.05);
+  --shadow-fab: 0px 4px 6px -4px rgba(0, 0, 0, 0.1), 0px 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-btn: 0px 2px 4px -2px rgba(1, 45, 29, 0.2), 0px 4px 6px -1px rgba(1, 45, 29, 0.2);
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-surface-page text-ink font-sans;
+    overscroll-behavior: none;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply text-base;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply w-full py-3 px-4 bg-primary-950 hover:bg-primary-900 active:bg-primary-900
+           text-white font-semibold rounded-lg transition-colors duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed shadow-btn
+           min-h-[44px] flex items-center justify-center gap-2;
+  }
+
+  .btn-secondary {
+    @apply w-full py-3 px-4 bg-surface-input hover:bg-surface-border active:bg-surface-border
+           text-ink font-semibold rounded-lg transition-colors duration-150
+           min-h-[44px] flex items-center justify-center gap-2;
+  }
+
+  .btn-cta {
+    @apply inline-flex items-center gap-2 px-4 py-2.5 bg-primary-900 hover:bg-primary-950
+           text-primary-300 font-semibold text-xs tracking-wider rounded
+           transition-colors duration-150 min-h-[44px];
+  }
+
+  .card {
+    @apply bg-surface-card rounded-lg p-4 border border-surface-border shadow-card;
+  }
+
+  .card-muted {
+    @apply bg-surface-muted rounded-lg p-4 border border-surface-border shadow-card;
+  }
+
+  .input-field {
+    @apply w-full bg-surface-card border border-surface-border rounded
+           px-4 py-3 text-ink placeholder-ink-muted
+           focus:outline-none focus:border-ink-muted focus:ring-1 focus:ring-ink-muted
+           transition-colors;
+  }
+
+  .label {
+    @apply block text-xs font-semibold tracking-wider text-ink-secondary mb-1.5 uppercase;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide;
+  }
+
+  .badge-available {
+    @apply bg-status-available text-status-available-text;
+  }
+
+  .badge-sold {
+    @apply bg-status-sold text-status-sold-text;
+  }
+
+  .filter-pill {
+    @apply px-4 py-2 rounded text-xs font-semibold tracking-wider transition-colors
+           min-h-[36px] whitespace-nowrap;
+  }
+
+  .filter-pill-active {
+    @apply bg-surface-input border border-surface-border text-ink;
+  }
+
+  .filter-pill-inactive {
+    @apply text-ink-secondary hover:text-ink;
+  }
+
+  .nav-tab {
+    @apply flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px]
+           text-ink-secondary transition-colors duration-150 text-[10px] uppercase tracking-wider;
+  }
+
+  .nav-tab.active {
+    @apply bg-primary-900 text-primary-300 rounded-xl px-4;
+  }
+
+  .section-label {
+    @apply text-xs font-semibold tracking-[0.1em] uppercase text-ink-muted;
+  }
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Full-bleed horizontal filter strip inside padded pages */
+.filter-scroll-wrap {
+  width: 100%;
+  max-width: 100%;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.scroll-x {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  gap: 0.5rem;
+  padding-bottom: 4px;
+  width: 100%;
+  max-width: 100%;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+.scroll-x > * {
+  flex-shrink: 0;
+}
+
+/* Ledger and other data tables */
+.table-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+}

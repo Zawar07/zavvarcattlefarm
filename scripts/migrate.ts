@@ -21,10 +21,10 @@ async function migrate() {
     throw new Error('Set DATABASE_URL or POSTGRES_URL_NON_POOLING in .env');
   }
 
-  const sql = readFileSync(
-    resolve(__dirname, '../supabase/migrations/001_schema.sql'),
-    'utf8',
-  );
+  const migrations = [
+    '001_schema.sql',
+    '002_cattle_shares.sql',
+  ];
 
   const pool = new Pool({
     connectionString,
@@ -33,9 +33,12 @@ async function migrate() {
 
   const client = await pool.connect();
   try {
-    console.log('Running migration 001_schema.sql...');
-    await client.query(sql);
-    console.log('Migration complete.');
+    for (const file of migrations) {
+      const sql = readFileSync(resolve(__dirname, `../supabase/migrations/${file}`), 'utf8');
+      console.log(`Running migration ${file}...`);
+      await client.query(sql);
+      console.log(`✓ ${file} complete.`);
+    }
   } finally {
     client.release();
     await pool.end();

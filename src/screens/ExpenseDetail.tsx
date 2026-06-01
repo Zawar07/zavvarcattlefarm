@@ -11,6 +11,7 @@ import ReceiptImageViewer from '../components/ReceiptImageViewer';
 import api from '../api/axios';
 import { formatDate } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
+import { proxiedBlobUrl } from '../utils/blobUrl';
 
 export default function ExpenseDetail() {
   const id = useParams()?.id as string;
@@ -50,9 +51,7 @@ export default function ExpenseDetail() {
   const canEdit = user?.role === 'super_admin' || hoursSince <= 24;
   const canDelete = user?.role === 'super_admin';
   const receiptUrl = expense.receipt_image_path
-    ? expense.receipt_image_path.startsWith('http')
-      ? expense.receipt_image_path
-      : `/uploads/receipts/${expense.receipt_image_path}`
+    ? proxiedBlobUrl(expense.receipt_image_path)
     : null;
   const isPdf = receiptUrl?.endsWith('.pdf');
 

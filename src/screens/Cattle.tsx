@@ -8,9 +8,10 @@ import CurrencyDisplay from '../components/CurrencyDisplay';
 import LoadingSpinner from '../components/LoadingSpinner';
 import FilterScroll from '../components/FilterScroll';
 import api from '../api/axios';
-import { formatDate } from '../utils/format';
+import { formatDate, todayISO } from '../utils/format';
+import { proxiedBlobUrl } from '../utils/blobUrl';
 
-// ── Animal type config ────────────────────────────────────────────────────
+// ── Shared config ──────────────────────────────────────────────────────────
 const ANIMAL_CONFIG: Record<string, { emoji: string; label: string }> = {
   bull:    { emoji: '🐂', label: 'Bull'    },
   cow:     { emoji: '🐄', label: 'Cow'     },
@@ -19,9 +20,20 @@ const ANIMAL_CONFIG: Record<string, { emoji: string; label: string }> = {
   chicken: { emoji: '🐓', label: 'Chicken' },
 };
 
+// Expense weight per animal type (chicken = 0 = excluded)
+const EXPENSE_WEIGHT: Record<string, number> = {
+  bull: 3, cow: 3, goat: 1, sheep: 1, chicken: 0,
+};
+
 function animalEmoji(type: string) { return ANIMAL_CONFIG[type]?.emoji ?? '🐾'; }
 function animalLabel(type: string) { return ANIMAL_CONFIG[type]?.label ?? type; }
 
+function daysBetween(from: string, to: string): number {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.max(1, Math.floor((new Date(to).getTime() - new Date(from).getTime()) / msPerDay));
+}
+
+// ── Icons ──────────────────────────────────────────────────────────────────
 function PlusIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
@@ -63,18 +75,15 @@ function AnimalCard({ animal, onClick }: { animal: AnimalCardProps; onClick: () 
       className="w-full text-left card p-0 overflow-hidden hover:shadow-md transition-shadow"
       aria-label={`${animal.animal_type} ${animal.tag_id ?? ''}`}
     >
-      {/* Header row */}
+      {/* Header */}
       <div className="flex items-start justify-between p-4 pb-3">
-        {/* Left: icon + type/id + breed */}
         <div className="flex items-start gap-3">
-          {/* Animal icon circle */}
           <div
             className="w-12 h-12 rounded flex items-center justify-center shrink-0 text-2xl"
             style={{ background: isSold ? 'rgba(65,72,68,0.1)' : 'rgba(27,67,50,0.1)' }}
           >
             {animalEmoji(animal.animal_type)}
           </div>
-          {/* Text */}
           <div className="flex flex-col gap-0.5">
             <span className="text-xs font-semibold tracking-wider uppercase text-ink-brand">
               {animalLabel(animal.animal_type).toUpperCase()}
@@ -85,28 +94,29 @@ function AnimalCard({ animal, onClick }: { animal: AnimalCardProps; onClick: () 
             </span>
           </div>
         </div>
-
-        {/* Right: status badge */}
         <span className={`badge mt-1 ${isSold ? 'badge-sold' : 'badge-available'}`}>
           {isSold ? 'SOLD' : 'AVAILABLE'}
         </span>
       </div>
 
-      {/* Photo placeholder / image */}
-      <div className="mx-4 rounded overflow-hidden bg-surface-input" style={{ height: 120 }}>
+      {/* Photo — full width */}
+      <div className="mx-0 overflow-hidden bg-surface-input" style={{ aspectRatio: '16/9' }}>
         {animal.image_url ? (
-          <img src={animal.image_url} alt={animalLabel(animal.animal_type)} className="w-full h-full object-cover" />
+          <img
+            src={proxiedBlobUrl(animal.image_url)!}
+            alt={animalLabel(animal.animal_type)}
+            className="w-full h-full object-cover"
+          />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-4xl opacity-30">
+          <div className="w-full h-full flex items-center justify-center text-5xl opacity-20">
             {animalEmoji(animal.animal_type)}
           </div>
         )}
       </div>
 
-      {/* Footer: purchase / sale info */}
-      <div className="border-t border-surface-border mt-3 mx-0">
+      {/* Footer */}
+      <div className="border-t border-surface-border mx-0">
         {isSold ? (
-          /* Sold card footer */
           <div className="p-4 space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-xs font-semibold tracking-wider text-ink-secondary">Sale Price</span>
@@ -131,7 +141,6 @@ function AnimalCard({ animal, onClick }: { animal: AnimalCardProps; onClick: () 
             </p>
           </div>
         ) : (
-          /* Available card footer */
           <div className="flex p-4 gap-4">
             <div className="flex-1">
               <p className="text-xs font-semibold tracking-wider text-ink-secondary mb-1">Purchase Date</p>
@@ -151,9 +160,151 @@ function AnimalCard({ animal, onClick }: { animal: AnimalCardProps; onClick: () 
   );
 }
 
+// ── Cost Calculator ────────────────────────────────────────────────────────
+// Formula: each animal earns "animal-day units" = weight × days_owned
+// Expense share = (animal's animal-days / total animal-days) × total expenses
+// This accounts for both size (bull eats more) and time (longer stay = more cost)
+
+function CostCalculator({ cattle, totalExpenses }: {
+  cattle: AnimalCardProps[];
+  totalExpenses: number;
+}) {
+  const today = todayISO();
+
+  // Only non-chicken animals (active or sold)
+  const eligible = cattle.filter(c => EXPENSE_WEIGHT[c.animal_type] > 0);
+
+  if (eligible.length === 0) {
+    return (
+      <div className="text-center py-10 text-ink-muted">
+        No animals to calculate costs for.
+      </div>
+    );
+  }
+
+  // Compute animal-day units for each
+  const withUnits = eligible.map(animal => {
+    const endDate = animal.is_sold ? (animal.sale_date ?? today) : today;
+    const days    = daysBetween(animal.purchase_date, endDate);
+    const weight  = EXPENSE_WEIGHT[animal.animal_type] ?? 0;
+    const units   = weight * days;
+    return { animal, days, weight, units };
+  });
+
+  const totalUnits = withUnits.reduce((s, r) => s + r.units, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Legend */}
+      <div className="card-muted space-y-2">
+        <p className="text-xs font-semibold tracking-wider text-ink-secondary uppercase">
+          Time-Weighted Cost Formula
+        </p>
+        <p className="text-xs text-ink-secondary leading-relaxed">
+          Share = <span className="font-semibold text-ink">(weight × days) ÷ total animal-days</span> × total expenses
+        </p>
+        <div className="flex flex-wrap gap-3 text-xs text-ink-secondary pt-1">
+          <span>🐂 Bull = 3×</span>
+          <span>🐄 Cow = 3×</span>
+          <span>🐐 Goat = 1×</span>
+          <span>🐑 Sheep = 1×</span>
+          <span className="text-ink-muted">🐓 Chicken = excluded</span>
+        </div>
+        <div className="flex justify-between items-center pt-1 border-t border-surface-border">
+          <span className="text-xs text-ink-secondary">Total Expenses Pool</span>
+          <span className="text-sm font-bold text-ink">
+            PKR {Math.round(totalExpenses).toLocaleString('en-IN')}
+          </span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-xs text-ink-secondary">Total Animal-Day Units</span>
+          <span className="text-sm font-bold text-ink">{Math.round(totalUnits).toLocaleString('en-IN')}</span>
+        </div>
+      </div>
+
+      {/* Per-animal cards */}
+      <div className="space-y-3">
+        {withUnits.map(({ animal, days, weight, units }) => {
+          const expenseShare  = totalUnits > 0 ? (units / totalUnits) * totalExpenses : 0;
+          const purchasePrice = parseFloat(animal.purchase_price);
+          const totalCost     = purchasePrice + expenseShare;
+
+          return (
+            <div key={animal.id} className="card p-0 overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center gap-3 p-3 bg-surface-subtle border-b border-surface-border">
+                <div
+                  className="w-10 h-10 rounded flex items-center justify-center text-xl shrink-0"
+                  style={{ background: 'rgba(27,67,50,0.1)' }}
+                >
+                  {animalEmoji(animal.animal_type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold tracking-wider uppercase text-ink-brand">
+                    {animalLabel(animal.animal_type)}
+                    {animal.is_sold && <span className="ml-1 text-status-sold-text">(sold)</span>}
+                  </p>
+                  <p className="text-sm font-semibold text-ink truncate">
+                    {animal.description || animalLabel(animal.animal_type)}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs font-bold text-ink-muted">{weight}× · {days}d</p>
+                  <p className="text-[10px] text-ink-muted">{Math.round(units)} units</p>
+                </div>
+              </div>
+
+              {/* Breakdown */}
+              <div className="p-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-ink-secondary">Purchase Price</span>
+                  <span className="font-medium text-ink">
+                    PKR {Math.round(purchasePrice).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-ink-secondary">
+                    Expense Share ({Math.round(units)}/{Math.round(totalUnits)} units)
+                  </span>
+                  <span className="font-medium text-ink">
+                    PKR {Math.round(expenseShare).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center border-t border-surface-border pt-2">
+                  <span className="text-xs font-bold tracking-wider uppercase text-ink">
+                    Total Cost
+                  </span>
+                  <span className="text-lg font-bold text-primary-950">
+                    PKR {Math.round(totalCost).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                {animal.is_sold && animal.sale_price && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold tracking-wider uppercase text-ink">
+                      Net Profit
+                    </span>
+                    <span className={`text-base font-bold ${
+                      parseFloat(animal.sale_price) - totalCost >= 0
+                        ? 'text-status-profit' : 'text-status-loss'
+                    }`}>
+                      {parseFloat(animal.sale_price) - totalCost >= 0 ? '+ ' : '- '}PKR{' '}
+                      {Math.abs(Math.round(parseFloat(animal.sale_price) - totalCost)).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function Cattle() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'inventory' | 'cost'>('inventory');
   const [typeFilter, setTypeFilter] = useState<'all' | 'bull' | 'cow' | 'goat' | 'sheep' | 'chicken'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sold'>('all');
 
@@ -173,10 +324,25 @@ export default function Cattle() {
     },
   });
 
+  // Cost tab: fetch ALL cattle (active + sold) and total expenses
+  const { data: allCattle } = useQuery({
+    queryKey: ['cattle-all-for-cost'],
+    queryFn: () => api.get('/cattle').then(r => r.data),
+    enabled: activeTab === 'cost',
+  });
+
+  const { data: expensesData } = useQuery({
+    queryKey: ['expenses-total-for-cost'],
+    queryFn: () => api.get('/expenses?limit=1').then(r => r.data),
+    enabled: activeTab === 'cost',
+  });
+
+  const totalExpenses: number = expensesData?.total_amount ?? 0;
+
   return (
     <Layout title="">
       <div className="p-4 space-y-4">
-        {/* ── Section: Heading & summary ─────────────────────── */}
+        {/* Heading */}
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-primary-950">Inventory</h1>
           <p className="text-base text-ink-secondary">
@@ -189,85 +355,104 @@ export default function Cattle() {
                 { key: 'chickens', label: 'Chicken' },
               ]
                 .filter(a => parseInt(summary[a.key] ?? '0') > 0)
-                .map(a => {
-                  const n = parseInt(summary[a.key]);
-                  return `${n} ${a.label}${n !== 1 ? 's' : ''}`;
-                });
+                .map(a => { const n = parseInt(summary[a.key]); return `${n} ${a.label}${n !== 1 ? 's' : ''}`; });
               const total = parseInt(summary.total_active ?? '0');
               return `Total Inventory: ${total} Animal${total !== 1 ? 's' : ''}${parts.length ? ` (${parts.join(', ')})` : ''}`;
             })() : 'Loading...'}
           </p>
         </div>
 
-        {/* Register Purchase button */}
-        <div>
+        {/* Tab switcher */}
+        <div className="flex gap-1 bg-surface-subtle rounded-lg p-1">
           <button
-            onClick={() => router.push('/cattle/new')}
-            className="btn-cta"
+            onClick={() => setActiveTab('inventory')}
+            className={`flex-1 py-2 rounded text-xs font-semibold tracking-wider uppercase transition-colors ${
+              activeTab === 'inventory'
+                ? 'bg-surface-card text-ink shadow-card border border-surface-border'
+                : 'text-ink-secondary hover:text-ink'
+            }`}
           >
-            <PlusIcon className="w-3.5 h-3.5" />
-            Register Purchase
+            🐄 Inventory
+          </button>
+          <button
+            onClick={() => setActiveTab('cost')}
+            className={`flex-1 py-2 rounded text-xs font-semibold tracking-wider uppercase transition-colors ${
+              activeTab === 'cost'
+                ? 'bg-surface-card text-ink shadow-card border border-surface-border'
+                : 'text-ink-secondary hover:text-ink'
+            }`}
+          >
+            💰 Cost Per Animal
           </button>
         </div>
 
-        {/* ── Section: Filters ───────────────────────────────── */}
-        <div className="bg-surface-subtle rounded-lg p-2 space-y-2">
-          <FilterScroll>
-            {(['all', 'bull', 'cow', 'goat', 'sheep', 'chicken'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTypeFilter(t)}
-                className={`filter-pill ${typeFilter === t ? 'filter-pill-active' : 'filter-pill-inactive'}`}
-              >
-                {t === 'all' ? 'All Cattle' : `${animalEmoji(t)} ${animalLabel(t)}s`}
-              </button>
-            ))}
-          </FilterScroll>
+        {activeTab === 'inventory' ? (
+          <>
+            <button onClick={() => router.push('/cattle/new')} className="btn-cta">
+              <PlusIcon className="w-3.5 h-3.5" />
+              Register Purchase
+            </button>
 
-          <FilterScroll>
-            {(['all', 'active', 'sold'] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setStatusFilter(s)}
-                className={`filter-pill flex items-center gap-1.5 ${statusFilter === s ? 'filter-pill-active' : 'filter-pill-inactive'}`}
-              >
-                <FilterIcon className="w-3 h-2" />
-                Status: {s === 'all' ? 'All' : s === 'active' ? 'Available' : 'Sold'}
-              </button>
-            ))}
-          </FilterScroll>
-        </div>
+            {/* Filters */}
+            <div className="bg-surface-subtle rounded-lg p-2 space-y-2">
+              <FilterScroll>
+                {(['all', 'bull', 'cow', 'goat', 'sheep', 'chicken'] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTypeFilter(t)}
+                    className={`filter-pill ${typeFilter === t ? 'filter-pill-active' : 'filter-pill-inactive'}`}
+                  >
+                    {t === 'all' ? 'All Cattle' : `${animalEmoji(t)} ${animalLabel(t)}s`}
+                  </button>
+                ))}
+              </FilterScroll>
+              <FilterScroll>
+                {(['all', 'active', 'sold'] as const).map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatusFilter(s)}
+                    className={`filter-pill flex items-center gap-1.5 ${statusFilter === s ? 'filter-pill-active' : 'filter-pill-inactive'}`}
+                  >
+                    <FilterIcon className="w-3 h-2" />
+                    Status: {s === 'all' ? 'All' : s === 'active' ? 'Available' : 'Sold'}
+                  </button>
+                ))}
+              </FilterScroll>
+            </div>
 
-        {/* ── Cattle Cards ───────────────────────────────────── */}
-        {isLoading ? (
-          <div className="flex justify-center py-10">
-            <LoadingSpinner size="lg" />
-          </div>
-        ) : cattle?.length === 0 ? (
-          <div className="text-center py-10 text-ink-muted">No cattle records found</div>
+            {/* Cards */}
+            {isLoading ? (
+              <div className="flex justify-center py-10"><LoadingSpinner size="lg" /></div>
+            ) : cattle?.length === 0 ? (
+              <div className="text-center py-10 text-ink-muted">No cattle records found</div>
+            ) : (
+              <div className="space-y-4">
+                {cattle?.map((c: AnimalCardProps) => (
+                  <AnimalCard key={c.id} animal={c} onClick={() => router.push(`/cattle/${c.id}`)} />
+                ))}
+              </div>
+            )}
+          </>
         ) : (
-          <div className="space-y-4">
-            {cattle?.map((c: AnimalCardProps) => (
-              <AnimalCard
-                key={c.id}
-                animal={c}
-                onClick={() => router.push(`/cattle/${c.id}`)}
-              />
-            ))}
-          </div>
+          !allCattle ? (
+            <div className="flex justify-center py-10"><LoadingSpinner size="lg" /></div>
+          ) : (
+            <CostCalculator cattle={allCattle} totalExpenses={totalExpenses} />
+          )
         )}
       </div>
 
-      {/* ── FAB ────────────────────────────────────────────────── */}
-      <button
-        onClick={() => router.push('/cattle/new')}
-        className="fixed bottom-6 right-4 w-14 h-14 bg-primary-950 hover:bg-primary-900 rounded-xl shadow-fab flex items-center justify-center text-white z-30"
-        aria-label="Register new cattle purchase"
-      >
-        <PlusIcon className="w-4 h-4" />
-      </button>
+      {activeTab === 'inventory' && (
+        <button
+          onClick={() => router.push('/cattle/new')}
+          className="fixed bottom-6 right-4 w-14 h-14 bg-primary-950 hover:bg-primary-900 rounded-xl shadow-fab flex items-center justify-center text-white z-30"
+          aria-label="Register new cattle purchase"
+        >
+          <PlusIcon className="w-4 h-4" />
+        </button>
+      )}
     </Layout>
   );
 }

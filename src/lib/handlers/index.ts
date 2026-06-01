@@ -395,6 +395,16 @@ export const cattleIndex: HandlerModule = {
       );
       const newBalance = await adjustBalance(-parseFloat(purchase_price), user.id, client);
       await logAudit(user.id, 'CREATE', 'cattle', rows[0].id, null, rows[0], client);
+      // ── Split cattle purchase cost among partners ──────────────────────
+      const partnerIds = await getPartnerIds();
+      for (const s of calculateShares(parseFloat(purchase_price), partnerIds)) {
+        await client.query(
+          `INSERT INTO cattle_shares (cattle_id, partner_id, share_amount, entry_type)
+           VALUES ($1,$2,$3,'purchase')
+           ON CONFLICT (cattle_id, partner_id, entry_type) DO NOTHING`,
+          [rows[0].id, s.partnerId, s.share],
+        );
+      }
       await client.query('COMMIT');
       return NextResponse.json(
         { cattle: rows[0], warning: newBalance < 0 ? 'LOW_BALANCE' : undefined },
@@ -464,6 +474,16 @@ async function sellCattle(req: NextRequest, id: string, user: AuthUser) {
     );
     const newBalance = await adjustBalance(parseFloat(String(sale_price)), user.id, client);
     await logAudit(user.id, 'SELL', 'cattle', id, rows[0], updated[0], client);
+    // ── Split cattle sale proceeds among partners (reduces outstanding) ──
+    const partnerIds = await getPartnerIds();
+    for (const s of calculateShares(parseFloat(String(sale_price)), partnerIds)) {
+      await client.query(
+        `INSERT INTO cattle_shares (cattle_id, partner_id, share_amount, entry_type)
+         VALUES ($1,$2,$3,'sale')
+         ON CONFLICT (cattle_id, partner_id, entry_type) DO NOTHING`,
+        [id, s.partnerId, s.share],
+      );
+    }
     await client.query('COMMIT');
     return NextResponse.json({
       ...updated[0],
@@ -845,15 +865,84 @@ export const ledgerMonthly: HandlerModule = {
 export const partnerShares: HandlerModule = {
   async GET(req) {
     await requireAuth(req);
-    const { rows } = await getPool().query(
+    const pool = getPool();
+
+    // Auto-backfill: create cattle_shares for any cattle missing them
+    const { rows: missing } = await pool.query(
+      `SELECT c.id, c.purchase_price, c.sale_price, c.is_sold
+       FROM cattle c
+       WHERE NOT EXISTS (
+         SELECT 1 FROM cattle_shares cs
+         WHERE cs.cattle_id = c.id AND cs.entry_type = 'purchase'
+       )`,
+    );
+
+    if (missing.length > 0) {
+      const partnerIds = await getPartnerIds();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const cattle of missing) {
+          for (const s of calculateShares(parseFloat(cattle.purchase_price), partnerIds)) {
+            await client.query(
+              `INSERT INTO cattle_shares (cattle_id, partner_id, share_amount, entry_type)
+               VALUES ($1,$2,$3,'purchase')
+               ON CONFLICT (cattle_id, partner_id, entry_type) DO NOTHING`,
+              [cattle.id, s.partnerId, s.share],
+            );
+          }
+          if (cattle.is_sold && cattle.sale_price) {
+            const { rows: existingSale } = await client.query(
+              `SELECT 1 FROM cattle_shares WHERE cattle_id=$1 AND entry_type='sale'`,
+              [cattle.id],
+            );
+            if (existingSale.length === 0) {
+              for (const s of calculateShares(parseFloat(cattle.sale_price), partnerIds)) {
+                await client.query(
+                  `INSERT INTO cattle_shares (cattle_id, partner_id, share_amount, entry_type)
+                   VALUES ($1,$2,$3,'sale')
+                   ON CONFLICT (cattle_id, partner_id, entry_type) DO NOTHING`,
+                  [cattle.id, s.partnerId, s.share],
+                );
+              }
+            }
+          }
+        }
+        await client.query('COMMIT');
+      } catch {
+        await client.query('ROLLBACK');
+      } finally {
+        client.release();
+      }
+    }
+
+    const { rows } = await pool.query(
       `SELECT u.id, u.name, u.phone_number,
-              COALESCE(SUM(ps.share_amount),0) as total_share,
-              COALESCE((SELECT SUM(amount_settled) FROM partner_settlements WHERE partner_id=u.id),0) as total_settled
+              COALESCE(
+                (SELECT SUM(ps.share_amount)
+                 FROM partner_shares ps
+                 JOIN expenses e ON e.id = ps.expense_id AND e.deleted_at IS NULL
+                 WHERE ps.partner_id = u.id)
+              , 0)
+              +
+              COALESCE(
+                (SELECT SUM(cs.share_amount)
+                 FROM cattle_shares cs
+                 WHERE cs.partner_id = u.id AND cs.entry_type = 'purchase')
+              , 0)
+              -
+              COALESCE(
+                (SELECT SUM(cs.share_amount)
+                 FROM cattle_shares cs
+                 WHERE cs.partner_id = u.id AND cs.entry_type = 'sale')
+              , 0)
+              as total_share,
+              COALESCE(
+                (SELECT SUM(amount_settled) FROM partner_settlements WHERE partner_id = u.id)
+              , 0) as total_settled
        FROM users u
-       LEFT JOIN partner_shares ps ON ps.partner_id=u.id
-       LEFT JOIN expenses e ON e.id=ps.expense_id AND e.deleted_at IS NULL
-       WHERE u.role IN ('super_admin','partner')
-       GROUP BY u.id,u.name,u.phone_number ORDER BY u.name`,
+       WHERE u.role IN ('super_admin','partner') AND u.is_active = TRUE
+       ORDER BY u.name`,
     );
     return NextResponse.json(
       rows.map(
@@ -865,7 +954,7 @@ export const partnerShares: HandlerModule = {
           total_settled: string;
         }) => ({
           ...r,
-          outstanding: Math.max(0, parseFloat(r.total_share) - parseFloat(r.total_settled)),
+          outstanding: parseFloat(r.total_share) - parseFloat(r.total_settled),
         }),
       ),
     );

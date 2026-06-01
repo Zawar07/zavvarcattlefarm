@@ -66,6 +66,7 @@ export default function Dashboard() {
   const { data: shares } = useQuery({
     queryKey: ['partner-shares'],
     queryFn: () => api.get('/partners/shares').then(r => r.data),
+    staleTime: 0,
   });
 
   return (
@@ -192,24 +193,53 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-2">
-            {shares?.map((s: { id: string; name: string; outstanding: number }) => (
-              <div
-                key={s.id}
-                className="bg-surface-subtle border border-surface-border rounded p-4 space-y-1"
-              >
-                <p className="text-xs font-medium tracking-wider uppercase text-ink-secondary">
-                  {s.name}
-                </p>
-                <p className="text-lg font-medium text-primary-950">
-                  PKR {Math.round(Math.abs(s.outstanding)).toLocaleString('en-IN')}
-                </p>
-                {s.id === user?.id && (
-                  <p className="text-xs text-ink-muted">(You)</p>
-                )}
-                {/* Progress bar placeholder */}
-                <div className="h-1 bg-surface-border rounded-full mt-2" />
-              </div>
-            ))}
+            {shares?.map((s: { id: string; name: string; outstanding: number }) => {
+              const owes = s.outstanding > 0;   // partner owes farm
+              const credit = s.outstanding < 0; // farm owes partner
+              const absAmount = Math.round(Math.abs(s.outstanding));
+              return (
+                <div
+                  key={s.id}
+                  className={`border rounded p-4 space-y-1 ${
+                    owes
+                      ? 'bg-orange-50 border-orange-200'
+                      : credit
+                      ? 'bg-green-50 border-green-200'
+                      : 'bg-surface-subtle border-surface-border'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium tracking-wider uppercase text-ink-secondary">
+                      {s.name}
+                      {s.id === user?.id && (
+                        <span className="ml-1 normal-case text-ink-muted">(You)</span>
+                      )}
+                    </p>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      owes
+                        ? 'bg-orange-100 text-orange-700'
+                        : credit
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-surface-input text-ink-muted'
+                    }`}>
+                      {owes ? 'Owes Farm' : credit ? 'Credit' : 'Settled'}
+                    </span>
+                  </div>
+                  <p className={`text-xl font-bold ${
+                    owes ? 'text-orange-700' : credit ? 'text-status-profit' : 'text-ink-muted'
+                  }`}>
+                    {owes ? '− ' : credit ? '+ ' : ''}PKR {absAmount.toLocaleString('en-IN')}
+                  </p>
+                  <p className="text-[10px] text-ink-muted">
+                    {owes
+                      ? 'This partner needs to contribute this amount'
+                      : credit
+                      ? 'Farm owes this partner'
+                      : 'All settled up'}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
 

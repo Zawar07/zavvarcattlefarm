@@ -26,6 +26,15 @@ export default function ExpenseDetail() {
     queryFn: () => api.get(`/expenses/${id}`).then(r => r.data),
   });
 
+  const toggleAnimalCostMutation = useMutation({
+    mutationFn: (is_animal_cost: boolean) =>
+      api.patch(`/expenses/${id}`, { is_animal_cost }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expense', id] });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/expenses/${id}`),
     onSuccess: () => {
@@ -43,29 +52,40 @@ export default function ExpenseDetail() {
 
   if (!expense) return (
     <Layout title="Expense" showBack showViewToggle={false}>
-      <div className="p-4 text-gray-500">Expense not found.</div>
+      <div className="p-4 text-ink-muted">Expense not found.</div>
     </Layout>
   );
 
   const hoursSince = (Date.now() - new Date(expense.created_at).getTime()) / 3600000;
   const canEdit = user?.role === 'super_admin' || hoursSince <= 24;
   const canDelete = user?.role === 'super_admin';
+  const canToggleAnimalCost = user?.role === 'super_admin' || hoursSince <= 24;
   const receiptUrl = expense.receipt_image_path
     ? proxiedBlobUrl(expense.receipt_image_path)
     : null;
   const isPdf = receiptUrl?.endsWith('.pdf');
+  const isAnimalCost: boolean = expense.is_animal_cost !== false;
 
   return (
     <Layout title="Expense Detail" showBack showViewToggle={false}>
       <div className="p-4 space-y-4">
-        {/* Amount */}
-        <div className="card bg-gradient-to-br from-gray-900 to-gray-950 text-center py-6">
-          <CurrencyDisplay farmValue={parseFloat(expense.amount)} className="text-3xl font-bold text-white" />
-          <p className="text-gray-400 text-sm mt-1">{formatDate(expense.expense_date)}</p>
+
+        {/* ── Amount header ──────────────────────────────────── */}
+        <div className="card text-center py-6 space-y-1">
+          <CurrencyDisplay farmValue={parseFloat(expense.amount)} className="text-3xl font-bold text-primary-950 block" />
+          <p className="text-ink-secondary text-sm">{formatDate(expense.expense_date)}</p>
+          <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
+            isAnimalCost
+              ? 'bg-primary-100 text-primary-800'
+              : 'bg-surface-input text-ink-muted'
+          }`}>
+            {isAnimalCost ? '🐄 Animal Cost' : '🏚️ Farm Cost'}
+          </span>
         </div>
 
-        {/* Details */}
+        {/* ── Details ────────────────────────────────────────── */}
         <div className="card space-y-3">
+          <p className="text-xs font-semibold tracking-wider uppercase text-ink-secondary">Details</p>
           <Row label="Category" value={expense.category_name} />
           <Row label="Sub-Category" value={expense.sub_category} />
           {expense.description && <Row label="Description" value={expense.description} />}
@@ -73,20 +93,56 @@ export default function ExpenseDetail() {
           <Row label="Added on" value={formatDate(expense.created_at)} />
         </div>
 
-        {/* Partner Shares */}
+        {/* ── Animal / Farm cost toggle ──────────────────────── */}
+        {canToggleAnimalCost && (
+          <div
+            className={`rounded-lg border-2 p-4 transition-all cursor-pointer ${
+              isAnimalCost
+                ? 'border-primary-700 bg-primary-50'
+                : 'border-surface-border bg-surface-subtle'
+            }`}
+            onClick={() => toggleAnimalCostMutation.mutate(!isAnimalCost)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className={`text-sm font-semibold ${isAnimalCost ? 'text-primary-900' : 'text-ink'}`}>
+                  {isAnimalCost ? '🐄 Animal Cost' : '🏚️ Farm Cost'}
+                </p>
+                <p className="text-xs text-ink-muted mt-0.5">
+                  {isAnimalCost
+                    ? 'Split across animals by weight & time'
+                    : 'Farm overhead — not allocated to animals'}
+                </p>
+              </div>
+              {toggleAnimalCostMutation.isPending ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <div className={`relative w-12 h-6 rounded-full transition-colors duration-200 ml-3 flex-shrink-0 ${
+                  isAnimalCost ? 'bg-primary-800' : 'bg-surface-input'
+                }`}>
+                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
+                    isAnimalCost ? 'translate-x-6' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Partner Shares ─────────────────────────────────── */}
         {expense.partner_shares?.length > 0 && (
-          <div className="card">
-            <h3 className="text-gray-400 text-sm mb-3">Partner Shares (1/3 each)</h3>
+          <div className="card space-y-3">
+            <p className="text-xs font-semibold tracking-wider uppercase text-ink-secondary">Partner Shares (1/3 each)</p>
             <div className="space-y-2">
               {expense.partner_shares.map((s: { partner_id: string; partner_name: string; share_amount: string }) => (
                 <div key={s.partner_id} className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-primary-800 flex items-center justify-center text-primary-300 text-xs font-bold">
+                    <div className="w-7 h-7 rounded-full bg-primary-900 flex items-center justify-center text-primary-300 text-xs font-bold">
                       {s.partner_name[0]}
                     </div>
-                    <span className="text-white text-sm">{s.partner_name}</span>
+                    <span className="text-sm text-ink">{s.partner_name}</span>
                   </div>
-                  <span className="text-primary-400 font-medium text-sm">
+                  <span className="text-primary-950 font-semibold text-sm">
                     PKR {Math.round(parseFloat(s.share_amount)).toLocaleString('en-IN')}
                   </span>
                 </div>
@@ -95,24 +151,24 @@ export default function ExpenseDetail() {
           </div>
         )}
 
-        {/* Receipt */}
+        {/* ── Receipt ────────────────────────────────────────── */}
         {receiptUrl && (
-          <div className="card">
-            <h3 className="text-gray-400 text-sm mb-3">Receipt / Invoice</h3>
+          <div className="card space-y-2">
+            <p className="text-xs font-semibold tracking-wider uppercase text-ink-secondary">Receipt / Invoice</p>
             {isPdf ? (
-              <button onClick={() => setShowReceipt(true)} className="flex items-center gap-2 text-primary-400 hover:text-primary-300 min-h-[44px]">
+              <button onClick={() => setShowReceipt(true)} className="flex items-center gap-2 text-primary-800 hover:text-primary-950 min-h-[44px]">
                 <span className="text-2xl">📄</span> View PDF Receipt
               </button>
             ) : (
               <button onClick={() => setShowReceipt(true)} className="block w-full">
-                <img src={receiptUrl} alt="Receipt" className="w-full rounded-xl object-cover max-h-48" />
-                <p className="text-gray-500 text-xs mt-1 text-center">Tap to zoom</p>
+                <img src={receiptUrl} alt="Receipt" className="w-full rounded-lg object-cover max-h-48" />
+                <p className="text-ink-muted text-xs mt-1 text-center">Tap to zoom</p>
               </button>
             )}
           </div>
         )}
 
-        {/* Actions */}
+        {/* ── Actions ────────────────────────────────────────── */}
         <div className="space-y-2">
           {canEdit && (
             <button onClick={() => router.push(`/expenses/${id}/edit`)} className="btn-secondary">
@@ -120,7 +176,10 @@ export default function ExpenseDetail() {
             </button>
           )}
           {canDelete && (
-            <button onClick={() => setShowDelete(true)} className="w-full py-3 rounded-xl bg-red-900/30 border border-red-800 text-red-400 font-medium min-h-[44px]">
+            <button
+              onClick={() => setShowDelete(true)}
+              className="w-full py-3 rounded-lg bg-red-50 border border-red-200 text-red-600 font-medium min-h-[44px]"
+            >
               🗑 Delete Expense
             </button>
           )}
@@ -148,8 +207,8 @@ export default function ExpenseDetail() {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between items-start gap-4">
-      <span className="text-gray-500 text-sm shrink-0">{label}</span>
-      <span className="text-white text-sm text-right">{value}</span>
+      <span className="text-sm text-ink-secondary shrink-0">{label}</span>
+      <span className="text-sm font-medium text-ink text-right">{value}</span>
     </div>
   );
 }

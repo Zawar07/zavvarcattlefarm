@@ -75,6 +75,7 @@ interface ExpenseItem {
   receipt_image_path?: string;
   recorded_by_name: string;
   partner_share?: number;
+  is_animal_cost?: boolean;
 }
 
 export default function Expenses() {
@@ -228,6 +229,12 @@ export default function Expenses() {
                           </div>
                           <p className="text-xs text-ink-secondary mt-0.5">
                             {e.category_name} • {formatDate(e.expense_date)}
+                            {e.is_animal_cost === false && (
+                              <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-surface-input text-ink-muted">Farm</span>
+                            )}
+                            {e.is_animal_cost === true && (
+                              <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary-100 text-primary-800">Animal</span>
+                            )}
                           </p>
                         </div>
                       </div>

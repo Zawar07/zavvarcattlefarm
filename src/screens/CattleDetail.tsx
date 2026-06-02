@@ -69,8 +69,8 @@ export default function CattleDetail() {
 
   // ── Cost estimation data ───────────────────────────────────────────────
   const { data: expensesData } = useQuery({
-    queryKey: ['expenses-total-for-detail'],
-    queryFn: () => api.get('/expenses?limit=1').then(r => r.data),
+    queryKey: ['expenses-animal-cost-total'],
+    queryFn: () => api.get('/expenses?limit=1&is_animal_cost=true').then(r => r.data),
     enabled: !!cattle,
   });
 
@@ -272,7 +272,7 @@ export default function CattleDetail() {
 
             <p className="text-[10px] text-ink-muted leading-relaxed">
               {myWeight}× weight × {myDays} days = {Math.round(myUnits)} units out of {Math.round(totalUnits)} total.
-              Bull/Cow = 3×, Goat/Sheep = 1×, Chicken excluded.
+              Only Feed/animal expenses included. Bull/Cow = 3×, Goat/Sheep = 1×.
             </p>
           </div>
         )}

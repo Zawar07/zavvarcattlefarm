@@ -6,6 +6,7 @@ export async function adjustBalance(
   delta: number,
   userId: string,
   client?: PoolClient,
+  source: 'system' | 'injection' = 'system',
 ): Promise<number> {
   const db = client || getPool();
   const { rows } = await db.query(
@@ -18,8 +19,8 @@ export async function adjustBalance(
     userId,
   ]);
   await db.query(
-    'INSERT INTO bank_balance_log (previous_amount, new_amount, changed_by) VALUES ($1, $2, $3)',
-    [current, next, userId],
+    'INSERT INTO bank_balance_log (previous_amount, new_amount, changed_by, source) VALUES ($1, $2, $3, $4)',
+    [current, next, userId, source],
   );
   return next;
 }
@@ -34,7 +35,7 @@ export async function getCurrentBalance() {
   return rows[0] || { amount: 0, updated_at: null, updated_by_name: null };
 }
 
-export async function setBalance(amount: number, userId: string) {
+export async function setBalance(amount: number, userId: string, source: 'restore' | 'system' = 'restore') {
   const pool = getPool();
   const client = await pool.connect();
   try {
@@ -48,8 +49,8 @@ export async function setBalance(amount: number, userId: string) {
       userId,
     ]);
     await client.query(
-      'INSERT INTO bank_balance_log (previous_amount, new_amount, changed_by) VALUES ($1, $2, $3)',
-      [prev, amount, userId],
+      'INSERT INTO bank_balance_log (previous_amount, new_amount, changed_by, source) VALUES ($1, $2, $3, $4)',
+      [prev, amount, userId, source],
     );
     await logAudit(
       userId,

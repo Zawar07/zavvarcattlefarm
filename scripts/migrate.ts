@@ -24,6 +24,8 @@ async function migrate() {
   const migrations = [
     '001_schema.sql',
     '002_cattle_shares.sql',
+    '003_expense_animal_cost.sql',
+    '004_bank_log_source.sql',
   ];
 
   const pool = new Pool({

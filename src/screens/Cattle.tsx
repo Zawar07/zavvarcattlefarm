@@ -201,7 +201,7 @@ function CostCalculator({ cattle, totalExpenses }: {
           Time-Weighted Cost Formula
         </p>
         <p className="text-xs text-ink-secondary leading-relaxed">
-          Share = <span className="font-semibold text-ink">(weight × days) ÷ total animal-days</span> × total expenses
+          Share = <span className="font-semibold text-ink">(weight × days) ÷ total animal-days</span> × animal expenses only
         </p>
         <div className="flex flex-wrap gap-3 text-xs text-ink-secondary pt-1">
           <span>🐂 Bull = 3×</span>
@@ -209,6 +209,7 @@ function CostCalculator({ cattle, totalExpenses }: {
           <span>🐐 Goat = 1×</span>
           <span>🐑 Sheep = 1×</span>
           <span className="text-ink-muted">🐓 Chicken = excluded</span>
+          <span className="text-ink-muted">🏚️ Farm costs = excluded</span>
         </div>
         <div className="flex justify-between items-center pt-1 border-t border-surface-border">
           <span className="text-xs text-ink-secondary">Total Expenses Pool</span>
@@ -324,7 +325,7 @@ export default function Cattle() {
     },
   });
 
-  // Cost tab: fetch ALL cattle (active + sold) and total expenses
+  // Cost tab: fetch ALL cattle (active + sold) and animal-cost-only expenses
   const { data: allCattle } = useQuery({
     queryKey: ['cattle-all-for-cost'],
     queryFn: () => api.get('/cattle').then(r => r.data),
@@ -332,8 +333,8 @@ export default function Cattle() {
   });
 
   const { data: expensesData } = useQuery({
-    queryKey: ['expenses-total-for-cost'],
-    queryFn: () => api.get('/expenses?limit=1').then(r => r.data),
+    queryKey: ['expenses-animal-cost-total'],
+    queryFn: () => api.get('/expenses?limit=1&is_animal_cost=true').then(r => r.data),
     enabled: activeTab === 'cost',
   });
 

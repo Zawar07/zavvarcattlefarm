@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Layout from '../components/Layout';
@@ -8,6 +8,9 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorBanner from '../components/ErrorBanner';
 import api from '../api/axios';
 import { todayISO } from '../utils/format';
+
+// Categories that default to animal cost
+const ANIMAL_COST_CATEGORIES = ['Feed'];
 
 export default function NewExpense() {
   const router = useRouter();
@@ -19,6 +22,7 @@ export default function NewExpense() {
   const [date, setDate] = useState(todayISO());
   const [description, setDescription] = useState('');
   const [receipt, setReceipt] = useState<File | null>(null);
+  const [isAnimalCost, setIsAnimalCost] = useState(false);
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
 
@@ -30,6 +34,13 @@ export default function NewExpense() {
   const selectedCategoryName = (categories as { id: number; name: string }[])
     .find(c => String(c.id) === categoryId)?.name || '';
 
+  // Auto-set toggle based on category — Feed = animal cost, everything else = farm cost
+  useEffect(() => {
+    if (selectedCategoryName) {
+      setIsAnimalCost(ANIMAL_COST_CATEGORIES.includes(selectedCategoryName));
+    }
+  }, [selectedCategoryName]);
+
   const mutation = useMutation({
     mutationFn: async () => {
       const formData = new FormData();
@@ -37,6 +48,7 @@ export default function NewExpense() {
       formData.append('category_id', categoryId);
       formData.append('sub_category', subCategory);
       formData.append('expense_date', date);
+      formData.append('is_animal_cost', isAnimalCost ? '1' : '0');
       if (description) formData.append('description', description);
       if (receipt) formData.append('receipt', receipt);
       return api.post('/expenses', formData, {
@@ -135,6 +147,37 @@ export default function NewExpense() {
           />
         </div>
 
+        {/* ── Animal Cost Toggle ──────────────────────────────── */}
+        <div
+          className={`rounded-lg border-2 p-4 transition-all cursor-pointer ${
+            isAnimalCost
+              ? 'border-primary-700 bg-primary-50'
+              : 'border-surface-border bg-surface-subtle'
+          }`}
+          onClick={() => setIsAnimalCost(v => !v)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className={`text-sm font-semibold ${isAnimalCost ? 'text-primary-900' : 'text-ink'}`}>
+                {isAnimalCost ? '🐄 Animal Cost' : '🏚️ Farm Cost'}
+              </p>
+              <p className="text-xs text-ink-muted mt-0.5">
+                {isAnimalCost
+                  ? 'Split across animals by weight & time'
+                  : 'Farm overhead — not allocated to animals'}
+              </p>
+            </div>
+            {/* Toggle pill */}
+            <div className={`relative w-12 h-6 rounded-full transition-colors duration-200 ml-3 flex-shrink-0 ${
+              isAnimalCost ? 'bg-primary-800' : 'bg-surface-input'
+            }`}>
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
+                isAnimalCost ? 'translate-x-6' : 'translate-x-0.5'
+              }`} />
+            </div>
+          </div>
+        </div>
+
         <div>
           <label className="label">
             Description {selectedCategoryName === 'Other' ? '*' : '(optional)'}
@@ -151,13 +194,13 @@ export default function NewExpense() {
 
         <div>
           <label className="label">Receipt / Invoice (optional)</label>
-          <label className="flex items-center gap-3 cursor-pointer bg-gray-800 border border-gray-700 border-dashed rounded-xl px-4 py-3 hover:border-primary-600 transition-colors">
+          <label className="flex items-center gap-3 cursor-pointer border border-dashed border-surface-border rounded-lg px-4 py-3 hover:border-ink-muted hover:bg-surface-muted transition-colors">
             <span className="text-2xl">📎</span>
             <div className="flex-1">
               {receipt ? (
-                <span className="text-white text-sm">{receipt.name}</span>
+                <span className="text-ink text-sm font-medium">{receipt.name}</span>
               ) : (
-                <span className="text-gray-500 text-sm">Attach image or PDF (max 10MB)</span>
+                <span className="text-ink-muted text-sm">Attach image or PDF (max 10MB)</span>
               )}
             </div>
             <input
@@ -179,7 +222,7 @@ export default function NewExpense() {
             <button
               type="button"
               onClick={() => setReceipt(null)}
-              className="text-red-400 text-xs mt-1 hover:text-red-300"
+              className="text-status-loss text-xs mt-1 hover:opacity-80"
             >
               Remove file
             </button>

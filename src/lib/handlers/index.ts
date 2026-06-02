@@ -34,10 +34,19 @@ export const bankBalance: HandlerModule = {
   async POST(req) {
     const user = await requireAuth(req);
     const { amount } = await parseJsonBody<{ amount?: number }>(req);
-    if (amount === undefined || isNaN(Number(amount)) || Number(amount) < 0) {
+    if (amount === undefined || isNaN(Number(amount))) {
       throw new AppError(400, 'VALIDATION_INVALID_AMOUNT', 'Valid amount is required.');
     }
     return NextResponse.json(await setBalance(Number(amount), user.id));
+  },
+  async PATCH(req) {
+    // Add (or subtract if negative) an amount to the current balance
+    const user = await requireAuth(req);
+    const { amount } = await parseJsonBody<{ amount?: number }>(req);
+    if (amount === undefined || isNaN(Number(amount))) {
+      throw new AppError(400, 'VALIDATION_INVALID_AMOUNT', 'Valid amount is required.');
+    }
+    return NextResponse.json(await adjustBalance(Number(amount), user.id, undefined, 'injection'));
   },
 };
 
@@ -83,6 +92,10 @@ export const expensesIndex: HandlerModule = {
       conditions.push(`e.recorded_by = $${idx++}`);
       params.push(q.recorded_by);
     }
+    if (q.is_animal_cost !== undefined) {
+      conditions.push(`e.is_animal_cost = $${idx++}`);
+      params.push(q.is_animal_cost === 'true');
+    }
     const p = parseInt(q.page || '1');
     const l = parseInt(q.limit || '50');
     const offset = (p - 1) * l;
@@ -115,6 +128,8 @@ export const expensesIndex: HandlerModule = {
     const pool = getPool();
     const { fields, file } = await parseForm(req);
     const { amount, category_id, sub_category, description, expense_date } = fields;
+    // is_animal_cost: '1' or 'true' means yes (default true)
+    const isAnimalCost = fields.is_animal_cost === '0' || fields.is_animal_cost === 'false' ? false : true;
     if (!amount || !category_id || !sub_category || !expense_date) {
       throw new AppError(
         400,
@@ -128,8 +143,8 @@ export const expensesIndex: HandlerModule = {
     try {
       await client.query('BEGIN');
       const { rows } = await client.query(
-        `INSERT INTO expenses (amount, category_id, sub_category, description, expense_date, receipt_image_path, recorded_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        `INSERT INTO expenses (amount, category_id, sub_category, description, expense_date, receipt_image_path, recorded_by, is_animal_cost)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
         [
           parseFloat(amount),
           parseInt(category_id),
@@ -138,6 +153,7 @@ export const expensesIndex: HandlerModule = {
           expense_date,
           receipt_image_path,
           user.id,
+          isAnimalCost,
         ],
       );
       const expense = rows[0];
@@ -828,6 +844,15 @@ async function getLedgerEntries(from_date?: string, to_date?: string) {
               c.sale_price as amount, u.name as recorded_by_name, NULL as receipt_image_path
        FROM cattle c JOIN users u ON u.id = c.recorded_by
        WHERE c.is_sold = TRUE AND c.sale_date IS NOT NULL
+       UNION ALL
+       SELECT l.id, 'capital_injection' as entry_type, l.changed_at::date as entry_date,
+              'Capital Injection' as category,
+              'Bank Balance Added' as description,
+              (l.new_amount - l.previous_amount) as amount,
+              u.name as recorded_by_name, NULL as receipt_image_path
+       FROM bank_balance_log l
+       JOIN users u ON u.id = l.changed_by
+       WHERE l.source = 'injection'
      ) ledger
      ${where}
      ORDER BY entry_date DESC, entry_type`,

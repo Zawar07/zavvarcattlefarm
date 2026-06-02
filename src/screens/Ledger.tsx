@@ -45,13 +45,14 @@ function UserIcon() {
 
 // ── Category badge ─────────────────────────────────────────────────────────
 const BADGE_STYLES: Record<string, { bg: string; text: string }> = {
-  'CATTLE SELL': { bg: '#C1ECD4', text: '#002114' },
-  'CATTLE BUY':  { bg: '#FFDEA9', text: '#271900' },
-  'EXPENSE':     { bg: '#FFDCC1', text: '#2D1601' },
-  'UTILITY':     { bg: '#FFDCC1', text: '#2D1601' },
-  'FEED':        { bg: '#FFDCC1', text: '#2D1601' },
-  'HEALTHCARE':  { bg: '#FFDCC1', text: '#2D1601' },
-  'PAYROLL':     { bg: '#E7E8E9', text: '#414844' },
+  'CATTLE SELL':        { bg: '#C1ECD4', text: '#002114' },
+  'CATTLE BUY':         { bg: '#FFDEA9', text: '#271900' },
+  'EXPENSE':            { bg: '#FFDCC1', text: '#2D1601' },
+  'UTILITY':            { bg: '#FFDCC1', text: '#2D1601' },
+  'FEED':               { bg: '#FFDCC1', text: '#2D1601' },
+  'HEALTHCARE':         { bg: '#FFDCC1', text: '#2D1601' },
+  'PAYROLL':            { bg: '#E7E8E9', text: '#414844' },
+  'CAPITAL INJECTION':  { bg: '#C1ECD4', text: '#002114' },
 };
 
 function categoryBadge(type: string) {

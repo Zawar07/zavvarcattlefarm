@@ -48,13 +48,25 @@ export default function Dashboard() {
     queryFn: () => api.get('/bank/balance').then(r => r.data),
   });
 
-  const { data: expenses } = useQuery({
-    queryKey: ['expenses-summary-month'],
+  // Monthly animal expenses (is_animal_cost = true only)
+  const { data: animalExpenses } = useQuery({
+    queryKey: ['expenses-animal-month'],
     queryFn: () => {
       const now = new Date();
       const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const to = now.toISOString().split('T')[0];
-      return api.get(`/expenses?from_date=${from}&to_date=${to}&limit=1`).then(r => r.data);
+      return api.get(`/expenses?from_date=${from}&to_date=${to}&limit=1&is_animal_cost=true`).then(r => r.data);
+    },
+  });
+
+  // Monthly farm expenses (is_animal_cost = false)
+  const { data: farmExpenses } = useQuery({
+    queryKey: ['expenses-farm-month'],
+    queryFn: () => {
+      const now = new Date();
+      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const to = now.toISOString().split('T')[0];
+      return api.get(`/expenses?from_date=${from}&to_date=${to}&limit=1&is_animal_cost=false`).then(r => r.data);
     },
   });
 
@@ -72,9 +84,6 @@ export default function Dashboard() {
   return (
     <Layout title="">
       <div className="p-4 space-y-4">
-
-        {/* ── View Mode Toggle (full-width segmented) ─────────── */}
-        {/* Rendered inline here so it sits below the header */}
 
         {/* ── Bank Balance Card ──────────────────────────────── */}
         <div
@@ -133,18 +142,27 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* ── Stats Row ─────────────────────────────────────── */}
-        <div
-          className="card border-l-4 border-l-ink-brand"
-          style={{ borderLeftColor: '#79573A' }}
-        >
-          <p className="text-xs font-semibold tracking-wider text-ink-secondary mb-1">Monthly Expenses</p>
-          <CurrencyDisplay
-            farmValue={expenses?.total_amount || 0}
-            className="text-[22px] font-bold text-ink-brand block"
-          />
+        {/* ── Stats — Animal + Farm expenses side by side ───── */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="card border-l-4" style={{ borderLeftColor: '#1b4332' }}>
+            <p className="text-xs font-semibold tracking-wider text-ink-secondary mb-1">🐄 Animal Expenses</p>
+            <p className="text-xs text-ink-muted mb-1">This month</p>
+            <CurrencyDisplay
+              farmValue={animalExpenses?.total_amount || 0}
+              className="text-lg font-bold text-primary-950 block"
+            />
+          </div>
+          <div className="card border-l-4" style={{ borderLeftColor: '#79573A' }}>
+            <p className="text-xs font-semibold tracking-wider text-ink-secondary mb-1">🏚️ Farm Expenses</p>
+            <p className="text-xs text-ink-muted mb-1">This month</p>
+            <CurrencyDisplay
+              farmValue={farmExpenses?.total_amount || 0}
+              className="text-lg font-bold text-ink-brand block"
+            />
+          </div>
         </div>
 
+        {/* ── Inventory Value ───────────────────────────────── */}
         <div className="card border-l-4 border-l-primary-950">
           <p className="text-xs font-semibold tracking-wider text-ink-secondary mb-1">Inventory Value</p>
           <CurrencyDisplay
@@ -194,48 +212,37 @@ export default function Dashboard() {
 
           <div className="space-y-2">
             {shares?.map((s: { id: string; name: string; outstanding: number }) => {
-              const owes = s.outstanding > 0;   // partner owes farm
-              const credit = s.outstanding < 0; // farm owes partner
+              const owes   = s.outstanding > 0;
+              const credit = s.outstanding < 0;
               const absAmount = Math.round(Math.abs(s.outstanding));
               return (
                 <div
                   key={s.id}
                   className={`border rounded p-4 space-y-1 ${
-                    owes
-                      ? 'bg-orange-50 border-orange-200'
-                      : credit
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-surface-subtle border-surface-border'
+                    owes   ? 'bg-orange-50 border-orange-200' :
+                    credit ? 'bg-green-50 border-green-200'  :
+                             'bg-surface-subtle border-surface-border'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-medium tracking-wider uppercase text-ink-secondary">
                       {s.name}
-                      {s.id === user?.id && (
-                        <span className="ml-1 normal-case text-ink-muted">(You)</span>
-                      )}
+                      {s.id === user?.id && <span className="ml-1 normal-case text-ink-muted">(You)</span>}
                     </p>
                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                      owes
-                        ? 'bg-orange-100 text-orange-700'
-                        : credit
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-surface-input text-ink-muted'
+                      owes   ? 'bg-orange-100 text-orange-700' :
+                      credit ? 'bg-green-100 text-green-700'  :
+                               'bg-surface-input text-ink-muted'
                     }`}>
                       {owes ? 'Owes Farm' : credit ? 'Credit' : 'Settled'}
                     </span>
                   </div>
-                  <p className={`text-xl font-bold ${
-                    owes ? 'text-orange-700' : credit ? 'text-status-profit' : 'text-ink-muted'
-                  }`}>
+                  <p className={`text-xl font-bold ${owes ? 'text-orange-700' : credit ? 'text-status-profit' : 'text-ink-muted'}`}>
                     {owes ? '− ' : credit ? '+ ' : ''}PKR {absAmount.toLocaleString('en-IN')}
                   </p>
                   <p className="text-[10px] text-ink-muted">
-                    {owes
-                      ? 'This partner needs to contribute this amount'
-                      : credit
-                      ? 'Farm owes this partner'
-                      : 'All settled up'}
+                    {owes   ? 'This partner needs to contribute this amount' :
+                     credit ? 'Farm owes this partner' : 'All settled up'}
                   </p>
                 </div>
               );

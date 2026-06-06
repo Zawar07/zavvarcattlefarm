@@ -466,6 +466,53 @@ export const cattleById: HandlerModule = {
     if (!rows[0]) throw new AppError(404, 'CATTLE_NOT_FOUND', 'Cattle record not found.');
     return NextResponse.json(rows[0]);
   },
+  async PATCH(req, { params }) {
+    const user = await requireAuth(req);
+    const pool = getPool();
+    const id = params.id;
+    const { rows: existing } = await pool.query('SELECT * FROM cattle WHERE id = $1', [id]);
+    if (!existing[0]) throw new AppError(404, 'CATTLE_NOT_FOUND', 'Cattle record not found.');
+    if (user.role !== 'super_admin') {
+      const hrs = (Date.now() - new Date(existing[0].created_at).getTime()) / 3600000;
+      if (hrs > 24) throw new AppError(403, 'FORBIDDEN', 'Cattle can only be edited within 24 hours.');
+    }
+    const { fields, file } = await parseForm(req);
+    const updates: string[] = [];
+    const p: unknown[] = [];
+    let idx = 1;
+    if (fields.purchase_price !== undefined) {
+      updates.push(`purchase_price = $${idx++}`);
+      p.push(parseFloat(fields.purchase_price));
+    }
+    if (fields.purchase_date !== undefined) {
+      updates.push(`purchase_date = $${idx++}`);
+      p.push(fields.purchase_date);
+    }
+    if (fields.description !== undefined) {
+      updates.push(`description = $${idx++}`);
+      p.push(fields.description || null);
+    }
+    if (file) {
+      const imageUrl = await uploadReceipt(file.buffer, file.originalname);
+      updates.push(`image_url = $${idx++}`);
+      p.push(imageUrl);
+    }
+    if (updates.length === 0) throw new AppError(400, 'NO_CHANGES', 'No fields to update.');
+    updates.push('updated_at = NOW()');
+    p.push(id);
+    const { rows } = await pool.query(
+      `UPDATE cattle SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+      p,
+    );
+    if (fields.purchase_price !== undefined) {
+      const priceDiff = parseFloat(fields.purchase_price) - parseFloat(existing[0].purchase_price);
+      if (priceDiff !== 0) {
+        await adjustBalance(-priceDiff, user.id);
+      }
+    }
+    await logAudit(user.id, 'UPDATE', 'cattle', id, existing[0], rows[0]);
+    return NextResponse.json(rows[0]);
+  },
 };
 
 async function sellCattle(req: NextRequest, id: string, user: AuthUser) {

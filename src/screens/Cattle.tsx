@@ -105,7 +105,7 @@ function AnimalCard({ animal, onClick }: { animal: AnimalCardProps; onClick: () 
           <img
             src={proxiedBlobUrl(animal.image_url)!}
             alt={animalLabel(animal.animal_type)}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-5xl opacity-20">

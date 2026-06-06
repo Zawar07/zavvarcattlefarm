@@ -128,7 +128,7 @@ export default function Dashboard() {
             <div className="w-10 h-10 rounded-xl bg-[#C1ECD4] flex items-center justify-center shrink-0">
               <CattleIcon />
             </div>
-            <span className="text-xl font-semibold text-ink">Buy Cattle</span>
+            <span className="text-xl font-semibold text-ink">Buy / Add Animal</span>
           </button>
 
           <button

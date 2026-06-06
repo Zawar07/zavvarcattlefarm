@@ -9,6 +9,38 @@ import ErrorBanner from '../components/ErrorBanner';
 import api from '../api/axios';
 import { todayISO } from '../utils/format';
 
+// ── Image compression ──────────────────────────────────────────────────────
+async function compressImage(file: File, maxSizeBytes = 5 * 1024 * 1024): Promise<File> {
+  if (file.size <= maxSizeBytes) return file;
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+      const maxDim = 1920;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) { height = Math.round((height * maxDim) / width); width = maxDim; }
+        else { width = Math.round((width * maxDim) / height); height = maxDim; }
+      }
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        if (blob && blob.size <= maxSizeBytes) {
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+        } else {
+          canvas.toBlob(blob2 => {
+            resolve(new File([blob2 ?? blob!], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+          }, 'image/jpeg', 0.6);
+        }
+      }, 'image/jpeg', 0.8);
+    };
+    img.src = url;
+  });
+}
+
 // ── Animal type config ─────────────────────────────────────────────────────
 const ANIMAL_TYPES = [
   { value: 'bull',    label: 'Bull',    emoji: '🐂', color: 'bg-amber-50  border-amber-300  text-amber-900'  },
@@ -31,15 +63,22 @@ export default function NewCattle() {
   const [description, setDescription] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { setError('Image must be under 10 MB.'); return; }
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    if (file.size > 20 * 1024 * 1024) { setError('Image must be under 20 MB.'); return; }
+    setCompressing(true);
+    try {
+      const compressed = await compressImage(file);
+      setImageFile(compressed);
+      setImagePreview(URL.createObjectURL(compressed));
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const mutation = useMutation({

@@ -10,6 +10,7 @@ import ErrorBanner from '../components/ErrorBanner';
 import api from '../api/axios';
 import { formatDate, todayISO } from '../utils/format';
 import { proxiedBlobUrl } from '../utils/blobUrl';
+import { useRouter } from 'next/navigation';
 
 // ── Config ─────────────────────────────────────────────────────────────────
 const ANIMAL_CONFIG: Record<string, { emoji: string; label: string }> = {
@@ -55,6 +56,7 @@ function formatDuration(from: string, to: string): string {
 // ── Component ──────────────────────────────────────────────────────────────
 export default function CattleDetail() {
   const id = useParams()?.id as string;
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [showSellForm, setShowSellForm] = useState(false);
   const [salePrice, setSalePrice] = useState('');
@@ -179,7 +181,7 @@ export default function CattleDetail() {
             <img
               src={imageUrl}
               alt={config.label}
-              className="w-full object-cover"
+              className="w-full object-contain bg-surface-muted"
               style={{ aspectRatio: '16/9' }}
             />
           ) : (
@@ -323,6 +325,16 @@ export default function CattleDetail() {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── Edit action ──────────────────────────────────────── */}
+        {!cattle.is_sold && (
+          <button
+            onClick={() => router.push(`/cattle/${id}/edit`)}
+            className="btn-secondary"
+          >
+            ✏️ Edit Animal
+          </button>
         )}
 
         {/* ── Sell action ──────────────────────────────────────── */}

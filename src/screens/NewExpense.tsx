@@ -12,6 +12,37 @@ import { todayISO } from '../utils/format';
 // Categories that default to animal cost
 const ANIMAL_COST_CATEGORIES = ['Feed'];
 
+/** Compress image files to under 5MB before upload */
+async function compressImage(file: File, maxSizeBytes = 5 * 1024 * 1024): Promise<File> {
+  if (file.size <= maxSizeBytes) return file;
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+      const maxDim = 1920;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) { height = Math.round((height * maxDim) / width); width = maxDim; }
+        else { width = Math.round((width * maxDim) / height); height = maxDim; }
+      }
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        if (blob && blob.size <= maxSizeBytes) {
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+        } else {
+          canvas.toBlob(blob2 => {
+            resolve(new File([blob2 ?? blob!], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+          }, 'image/jpeg', 0.6);
+        }
+      }, 'image/jpeg', 0.8);
+    };
+    img.src = url;
+  });
+}
+
 export default function NewExpense() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -22,6 +53,8 @@ export default function NewExpense() {
   const [date, setDate] = useState(todayISO());
   const [description, setDescription] = useState('');
   const [receipt, setReceipt] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
   const [isAnimalCost, setIsAnimalCost] = useState(false);
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
@@ -197,31 +230,48 @@ export default function NewExpense() {
           <label className="flex items-center gap-3 cursor-pointer border border-dashed border-surface-border rounded-lg px-4 py-3 hover:border-ink-muted hover:bg-surface-muted transition-colors">
             <span className="text-2xl">📎</span>
             <div className="flex-1">
-              {receipt ? (
+              {compressing ? (
+                <span className="text-ink-muted text-sm">Compressing image…</span>
+              ) : receipt ? (
                 <span className="text-ink text-sm font-medium">{receipt.name}</span>
               ) : (
-                <span className="text-ink-muted text-sm">Attach image or PDF (max 10MB)</span>
+                <span className="text-ink-muted text-sm">Attach image or PDF (auto-compressed if over 5MB)</span>
               )}
             </div>
             <input
               type="file"
-              accept="image/jpeg,image/png,application/pdf"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
               className="hidden"
-              onChange={e => {
+              onChange={async e => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                if (file.size > 10 * 1024 * 1024) {
-                  setError('File must be under 10MB');
-                  return;
+                if (file.size > 20 * 1024 * 1024) { setError('File must be under 20MB'); return; }
+                // Compress images, leave PDFs as-is
+                if (file.type.startsWith('image/')) {
+                  setCompressing(true);
+                  try {
+                    const compressed = await compressImage(file);
+                    setReceipt(compressed);
+                    setReceiptPreview(URL.createObjectURL(compressed));
+                  } finally {
+                    setCompressing(false);
+                  }
+                } else {
+                  setReceipt(file);
+                  setReceiptPreview(null);
                 }
-                setReceipt(file);
               }}
             />
           </label>
+          {receiptPreview && (
+            <div className="relative mt-2 rounded-lg overflow-hidden border border-surface-border bg-surface-muted">
+              <img src={receiptPreview} alt="Receipt preview" className="w-full object-contain max-h-48" />
+            </div>
+          )}
           {receipt && (
             <button
               type="button"
-              onClick={() => setReceipt(null)}
+              onClick={() => { setReceipt(null); setReceiptPreview(null); }}
               className="text-status-loss text-xs mt-1 hover:opacity-80"
             >
               Remove file

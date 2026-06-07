@@ -127,6 +127,15 @@ export default function Expenses() {
 
         {/* ── Search & Filter ────────────────────────────────── */}
         <div className="space-y-3">
+          {/* Add Expense button */}
+          <button
+            onClick={() => router.push('/expenses/new')}
+            className="btn-cta w-full"
+          >
+            <PlusIcon />
+            Add Expense
+          </button>
+
           {/* Search input */}
           <div className="relative">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none">

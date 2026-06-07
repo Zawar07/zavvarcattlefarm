@@ -110,7 +110,8 @@ export default function EditCattle() {
       queryClient.invalidateQueries({ queryKey: ['cattle'] });
       queryClient.invalidateQueries({ queryKey: ['cattle-summary'] });
       queryClient.invalidateQueries({ queryKey: ['bank-balance'] });
-      router.push(`/cattle/${id}`);
+      // Use replace so the edit page is removed from history — back button goes to detail, not edit
+      router.replace(`/cattle/${id}`);
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })

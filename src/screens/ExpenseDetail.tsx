@@ -26,15 +26,6 @@ export default function ExpenseDetail() {
     queryFn: () => api.get(`/expenses/${id}`).then(r => r.data),
   });
 
-  const toggleAnimalCostMutation = useMutation({
-    mutationFn: (is_animal_cost: boolean) =>
-      api.patch(`/expenses/${id}`, { is_animal_cost }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expense', id] });
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
-    },
-  });
-
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/expenses/${id}`),
     onSuccess: () => {
@@ -59,7 +50,6 @@ export default function ExpenseDetail() {
   const hoursSince = (Date.now() - new Date(expense.created_at).getTime()) / 3600000;
   const canEdit = user?.role === 'super_admin' || hoursSince <= 24;
   const canDelete = user?.role === 'super_admin';
-  const canToggleAnimalCost = user?.role === 'super_admin' || hoursSince <= 24;
   const receiptUrl = expense.receipt_image_path
     ? proxiedBlobUrl(expense.receipt_image_path)
     : null;
@@ -75,9 +65,7 @@ export default function ExpenseDetail() {
           <CurrencyDisplay farmValue={parseFloat(expense.amount)} className="text-3xl font-bold text-primary-950 block" />
           <p className="text-ink-secondary text-sm">{formatDate(expense.expense_date)}</p>
           <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
-            isAnimalCost
-              ? 'bg-primary-100 text-primary-800'
-              : 'bg-surface-input text-ink-muted'
+            isAnimalCost ? 'bg-primary-100 text-primary-800' : 'bg-surface-input text-ink-muted'
           }`}>
             {isAnimalCost ? '🐄 Animal Cost' : '🏚️ Farm Cost'}
           </span>
@@ -92,42 +80,6 @@ export default function ExpenseDetail() {
           <Row label="Recorded by" value={expense.recorded_by_name} />
           <Row label="Added on" value={formatDate(expense.created_at)} />
         </div>
-
-        {/* ── Animal / Farm cost toggle ──────────────────────── */}
-        {canToggleAnimalCost && (
-          <div
-            className={`rounded-lg border-2 p-4 transition-all cursor-pointer ${
-              isAnimalCost
-                ? 'border-primary-700 bg-primary-50'
-                : 'border-surface-border bg-surface-subtle'
-            }`}
-            onClick={() => toggleAnimalCostMutation.mutate(!isAnimalCost)}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className={`text-sm font-semibold ${isAnimalCost ? 'text-primary-900' : 'text-ink'}`}>
-                  {isAnimalCost ? '🐄 Animal Cost' : '🏚️ Farm Cost'}
-                </p>
-                <p className="text-xs text-ink-muted mt-0.5">
-                  {isAnimalCost
-                    ? 'Split across animals by weight & time'
-                    : 'Farm overhead — not allocated to animals'}
-                </p>
-              </div>
-              {toggleAnimalCostMutation.isPending ? (
-                <LoadingSpinner size="sm" />
-              ) : (
-                <div className={`relative w-12 h-6 rounded-full transition-colors duration-200 ml-3 flex-shrink-0 ${
-                  isAnimalCost ? 'bg-primary-800' : 'bg-surface-input'
-                }`}>
-                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
-                    isAnimalCost ? 'translate-x-6' : 'translate-x-0.5'
-                  }`} />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* ── Partner Shares ─────────────────────────────────── */}
         {expense.partner_shares?.length > 0 && (
@@ -161,7 +113,7 @@ export default function ExpenseDetail() {
               </button>
             ) : (
               <button onClick={() => setShowReceipt(true)} className="block w-full">
-                <img src={receiptUrl} alt="Receipt" className="w-full rounded-lg object-cover max-h-48" />
+                <img src={receiptUrl} alt="Receipt" className="w-full rounded-lg object-contain bg-surface-muted max-h-64" />
                 <p className="text-ink-muted text-xs mt-1 text-center">Tap to zoom</p>
               </button>
             )}

@@ -286,6 +286,10 @@ export const expenseById: HandlerModule = {
         updates.push(`expense_date = $${idx++}`);
         p.push(body.expense_date);
       }
+      if (body.is_animal_cost !== undefined) {
+        updates.push(`is_animal_cost = $${idx++}`);
+        p.push(Boolean(body.is_animal_cost));
+      }
       updates.push('updated_at = NOW()');
       p.push(id);
       const { rows: updated } = await client.query(
@@ -480,6 +484,13 @@ export const cattleById: HandlerModule = {
     const updates: string[] = [];
     const p: unknown[] = [];
     let idx = 1;
+    if (fields.animal_type !== undefined) {
+      if (!['bull', 'cow', 'goat', 'sheep', 'chicken'].includes(fields.animal_type)) {
+        throw new AppError(400, 'VALIDATION_INVALID_TYPE', 'Invalid animal_type.');
+      }
+      updates.push(`animal_type = $${idx++}`);
+      p.push(fields.animal_type);
+    }
     if (fields.purchase_price !== undefined) {
       updates.push(`purchase_price = $${idx++}`);
       p.push(parseFloat(fields.purchase_price));

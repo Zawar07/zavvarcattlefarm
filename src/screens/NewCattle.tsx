@@ -160,11 +160,12 @@ export default function NewCattle() {
           />
 
           {imagePreview ? (
-            <div className="relative rounded-lg overflow-hidden border border-surface-border">
+            <div className="relative rounded-lg overflow-hidden border border-surface-border bg-surface-muted">
               <img
                 src={imagePreview}
                 alt="Preview"
-                className="w-full h-48 object-cover"
+                className="w-full object-contain"
+                style={{ aspectRatio: '16/9' }}
               />
               <button
                 type="button"

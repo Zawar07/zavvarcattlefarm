@@ -9,6 +9,8 @@ import ErrorBanner from '../components/ErrorBanner';
 import api from '../api/axios';
 import { formatDate } from '../utils/format';
 
+const ANIMAL_COST_CATEGORIES = ['Feed'];
+
 export default function EditExpense() {
   const id = useParams()?.id as string;
   const router = useRouter();
@@ -19,6 +21,7 @@ export default function EditExpense() {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
+  const [isAnimalCost, setIsAnimalCost] = useState(true);
   const [error, setError] = useState('');
 
   const { data: categories = [] } = useQuery({
@@ -35,11 +38,22 @@ export default function EditExpense() {
     if (expense) {
       setCategoryId(String(expense.category_id));
       setSubCategory(expense.sub_category);
-      setAmount(String(expense.amount));
+      setAmount(String(Math.round(parseFloat(expense.amount))));
       setDate(expense.expense_date?.split('T')[0] || expense.expense_date);
       setDescription(expense.description || '');
+      setIsAnimalCost(expense.is_animal_cost !== false);
     }
   }, [expense]);
+
+  // Auto-update toggle when category changes
+  const selectedCategoryName = (categories as { id: number; name: string }[])
+    .find(c => String(c.id) === categoryId)?.name || '';
+
+  useEffect(() => {
+    if (selectedCategoryName && expense) {
+      setIsAnimalCost(ANIMAL_COST_CATEGORIES.includes(selectedCategoryName));
+    }
+  }, [selectedCategoryName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mutation = useMutation({
     mutationFn: () => api.patch(`/expenses/${id}`, {
@@ -48,12 +62,13 @@ export default function EditExpense() {
       amount: parseFloat(amount),
       expense_date: date,
       description: description || undefined,
+      is_animal_cost: isAnimalCost,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['expense', id] });
       queryClient.invalidateQueries({ queryKey: ['bank-balance'] });
-      router.push(`/expenses/${id}`);
+      router.replace(`/expenses/${id}`);
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })
@@ -84,19 +99,14 @@ export default function EditExpense() {
         {error && <ErrorBanner message={error} onDismiss={() => setError('')} />}
 
         {expense && (
-          <div className="card bg-gray-800/50 text-xs text-gray-500">
+          <div className="card-muted text-xs text-ink-muted">
             Originally added {formatDate(expense.created_at)} by {expense.recorded_by_name}
           </div>
         )}
 
         <div>
           <label className="label">Category *</label>
-          <select
-            value={categoryId}
-            onChange={e => setCategoryId(e.target.value)}
-            className="input-field"
-            required
-          >
+          <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="input-field" required>
             <option value="">Select category</option>
             {(categories as { id: number; name: string }[]).map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
@@ -106,47 +116,44 @@ export default function EditExpense() {
 
         <div>
           <label className="label">Sub-Category / Item Name *</label>
-          <input
-            value={subCategory}
-            onChange={e => setSubCategory(e.target.value)}
-            placeholder="e.g. Generator Fuel"
-            className="input-field"
-            required
-          />
+          <input value={subCategory} onChange={e => setSubCategory(e.target.value)} placeholder="e.g. Generator Fuel" className="input-field" required />
         </div>
 
         <div>
           <label className="label">Amount (PKR) *</label>
-          <input
-            type="number"
-            value={amount}
-            onChange={e => setAmount(e.target.value)}
-            className="input-field"
-            inputMode="numeric"
-            min="1"
-            required
-          />
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="input-field" inputMode="numeric" min="1" required />
         </div>
 
         <div>
           <label className="label">Date *</label>
-          <input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            className="input-field"
-            required
-          />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-field" required />
         </div>
 
         <div>
           <label className="label">Description (optional)</label>
-          <textarea
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            className="input-field resize-none"
-            rows={3}
-          />
+          <textarea value={description} onChange={e => setDescription(e.target.value)} className="input-field resize-none" rows={3} />
+        </div>
+
+        {/* ── Animal / Farm cost toggle ──────────────────────── */}
+        <div
+          className={`rounded-lg border-2 p-4 transition-all cursor-pointer ${
+            isAnimalCost ? 'border-primary-700 bg-primary-50' : 'border-surface-border bg-surface-subtle'
+          }`}
+          onClick={() => setIsAnimalCost(v => !v)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className={`text-sm font-semibold ${isAnimalCost ? 'text-primary-900' : 'text-ink'}`}>
+                {isAnimalCost ? '🐄 Animal Cost' : '🏚️ Farm Cost'}
+              </p>
+              <p className="text-xs text-ink-muted mt-0.5">
+                {isAnimalCost ? 'Split across animals by weight & time' : 'Farm overhead — not allocated to animals'}
+              </p>
+            </div>
+            <div className={`relative w-12 h-6 rounded-full transition-colors duration-200 ml-3 flex-shrink-0 ${isAnimalCost ? 'bg-primary-800' : 'bg-surface-input'}`}>
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isAnimalCost ? 'translate-x-6' : 'translate-x-0.5'}`} />
+            </div>
+          </div>
         </div>
 
         <button type="submit" className="btn-primary" disabled={mutation.isPending}>

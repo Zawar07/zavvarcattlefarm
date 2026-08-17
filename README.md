@@ -24,14 +24,6 @@ npx tsx scripts/seed.ts
 npm run dev
 ```
 
-## Default logins (after seed)
-
-| Name   | Phone       | Password     | Role         |
-|--------|-------------|--------------|--------------|
-| Zavvar | 03485157554 | zavvaradmin  | super_admin  |
-| Danyal | 03418888818 | danyaladmin  | partner      |
-| Adil   | 03358073584 | adiladmin    | partner      |
-
 ## Deploy (Vercel Hobby)
 
 See [DEPLOY.md](./DEPLOY.md). In the Vercel project, set **Root Directory** to `zcf-next`.

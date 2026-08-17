@@ -81,6 +81,17 @@ export default function Dashboard() {
     staleTime: 0,
   });
 
+  const { data: contributions } = useQuery({
+    queryKey: ['partner-contributions'],
+    queryFn: () => api.get('/partners/contributions').then(r => r.data),
+  });
+
+  const contributionTotals = contributions?.totals as { id: string; name: string; total_contributed: string }[] | undefined;
+  const totalContributed = contributionTotals?.reduce(
+    (sum, t) => sum + parseFloat(t.total_contributed || '0'),
+    0,
+  ) || 0;
+
   return (
     <Layout title="">
       <div className="p-4 space-y-4">
@@ -199,6 +210,41 @@ export default function Dashboard() {
           {parseInt(cattle?.total_active ?? '0') === 0 && (
             <p className="text-sm text-ink-muted text-center py-2">No active animals</p>
           )}
+        </div>
+
+        {/* ── Partner Contributions ───────────────────────── */}
+        <div className="card space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-primary-950">Partner Contributions</h3>
+            <span className="text-xs font-semibold text-ink-secondary">
+              Total PKR {Math.round(totalContributed).toLocaleString('en-IN')}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {contributionTotals?.map(t => {
+              const contributed = parseFloat(t.total_contributed || '0');
+              return (
+                <div
+                  key={t.id}
+                  className="border rounded p-4 flex items-center justify-between bg-surface-subtle border-surface-border"
+                >
+                  <div>
+                    <p className="text-xs font-medium tracking-wider uppercase text-ink-secondary">
+                      {t.name}
+                      {t.id === user?.id && <span className="ml-1 normal-case text-ink-muted">(You)</span>}
+                    </p>
+                    <p className={`text-xl font-bold ${contributed > 0 ? 'text-primary-950' : 'text-ink-muted'}`}>
+                      PKR {Math.round(contributed).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-surface-input text-ink-muted">
+                    {contributed > 0 ? 'Contributed' : 'Not yet'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Partner Shares ────────────────────────────────── */}

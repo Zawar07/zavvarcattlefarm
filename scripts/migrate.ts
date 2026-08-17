@@ -13,9 +13,9 @@ if (process.env.ALLOW_INSECURE_DB_TLS === '1') {
 async function migrate() {
   const connectionString =
     process.env.DATABASE_URL_MIGRATE ||
-    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.DATABASE_URL ||
     process.env.POSTGRES_URL ||
-    process.env.DATABASE_URL;
+    process.env.POSTGRES_URL_NON_POOLING;
 
   if (!connectionString) {
     throw new Error('Set DATABASE_URL or POSTGRES_URL_NON_POOLING in .env');
@@ -26,6 +26,7 @@ async function migrate() {
     '002_cattle_shares.sql',
     '003_expense_animal_cost.sql',
     '004_bank_log_source.sql',
+    '005_partner_contributions.sql',
   ];
 
   const pool = new Pool({

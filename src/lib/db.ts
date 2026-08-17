@@ -25,14 +25,13 @@ function buildPoolConfig(): PoolConfig {
     throw new Error('DATABASE_URL or POSTGRES_URL is not set');
   }
 
-  const ssl = needsSsl(connectionString);
+  // Strip non-standard params that confuse pg's URL parser
+  connectionString = connectionString
+    .replace(/[&?]uselibpqcompat=true/g, '')
+    .replace(/[&?]pgbouncer=true/g, '')
+    .replace(/[&?]supa=[^&]*/g, '');
 
-  // pg v8+ treats sslmode=require as verify-full; uselibpqcompat restores require semantics
-  if (ssl && !connectionString.includes('uselibpqcompat')) {
-    connectionString += connectionString.includes('?')
-      ? '&uselibpqcompat=true'
-      : '?uselibpqcompat=true';
-  }
+  const ssl = needsSsl(connectionString);
 
   // Windows local dev: Supabase pooler cert chain (do not set ALLOW_INSECURE_DB_TLS on Vercel)
   if (process.env.ALLOW_INSECURE_DB_TLS === '1') {
@@ -51,7 +50,10 @@ function buildPoolConfig(): PoolConfig {
 export function getPool(): Pool {
   if (!pool) {
     pool = new Pool(buildPoolConfig());
-    pool.on('error', (err) => console.error('Pool error', err));
+    pool.on('error', (err) => {
+      console.error('Pool error', err);
+      pool = null; // Reset so next request tries to reconnect
+    });
   }
   return pool;
 }

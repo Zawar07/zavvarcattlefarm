@@ -1072,6 +1072,99 @@ export const partnerSettlements: HandlerModule = {
   },
 };
 
+// ── Partner Contributions ─────────────────────────────────────────────────────
+
+export const partnerContributions: HandlerModule = {
+  async GET(req) {
+    await requireAuth(req);
+    const { rows } = await getPool().query(
+      `SELECT pc.*, u.name as partner_name, r.name as recorded_by_name
+       FROM partner_contributions pc
+       JOIN users u ON u.id = pc.partner_id
+       JOIN users r ON r.id = pc.recorded_by
+       ORDER BY pc.contributed_at DESC`,
+    );
+    const { rows: totals } = await getPool().query(
+      `SELECT u.id, u.name,
+              COALESCE(SUM(pc.amount), 0) as total_contributed
+       FROM users u
+       LEFT JOIN partner_contributions pc ON pc.partner_id = u.id
+       WHERE u.role IN ('super_admin', 'partner') AND u.is_active = TRUE
+       GROUP BY u.id, u.name ORDER BY u.name`,
+    );
+    const { rows: injectedRows } = await getPool().query(
+      `SELECT COALESCE(SUM(new_amount - previous_amount), 0) as total_injected
+       FROM bank_balance_log
+       WHERE source = 'injection'`,
+    );
+    const totalInjected = parseFloat(injectedRows[0]?.total_injected || '0');
+    const totalContributed = totals.reduce(
+      (sum, t) => sum + parseFloat(String(t.total_contributed)),
+      0,
+    );
+    const unallocated = Math.max(0, totalInjected - totalContributed);
+    return NextResponse.json({
+      contributions: rows,
+      totals,
+      summary: {
+        total_injected: totalInjected,
+        total_contributed: totalContributed,
+        unallocated,
+        needs_backfill: unallocated > 0,
+      },
+    });
+  },
+  async POST(req) {
+    const user = await requireAuth(req);
+    requireSuperAdmin(user);
+    const { partner_id, amount, note } = await parseJsonBody<{
+      partner_id?: string;
+      amount?: number;
+      note?: string;
+    }>(req);
+    if (!partner_id || !amount || amount <= 0) {
+      throw new AppError(400, 'VALIDATION_MISSING_FIELDS', 'partner_id and amount required.');
+    }
+    const { rows } = await getPool().query(
+      `INSERT INTO partner_contributions (partner_id, amount, note, recorded_by)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [partner_id, amount, note || null, user.id],
+    );
+    return NextResponse.json(rows[0], { status: 201 });
+  },
+};
+
+export const partnerContributionById: HandlerModule = {
+  async PATCH(req, { params }) {
+    const user = await requireAuth(req);
+    requireSuperAdmin(user);
+    const { amount, note } = await parseJsonBody<{ amount?: number; note?: string }>(req);
+    const updates: string[] = [];
+    const p: unknown[] = [];
+    let idx = 1;
+    if (amount !== undefined) { updates.push(`amount=$${idx++}`); p.push(amount); }
+    if (note !== undefined)   { updates.push(`note=$${idx++}`);   p.push(note);   }
+    if (!updates.length) throw new AppError(400, 'NO_CHANGES', 'Nothing to update.');
+    p.push(params.id);
+    const { rows } = await getPool().query(
+      `UPDATE partner_contributions SET ${updates.join(',')} WHERE id=$${idx} RETURNING *`,
+      p,
+    );
+    if (!rows[0]) throw new AppError(404, 'NOT_FOUND', 'Contribution not found.');
+    return NextResponse.json(rows[0]);
+  },
+  async DELETE(req, { params }) {
+    const user = await requireAuth(req);
+    requireSuperAdmin(user);
+    const { rows } = await getPool().query(
+      'DELETE FROM partner_contributions WHERE id=$1 RETURNING *',
+      [params.id],
+    );
+    if (!rows[0]) throw new AppError(404, 'NOT_FOUND', 'Contribution not found.');
+    return NextResponse.json({ message: 'Deleted.' });
+  },
+};
+
 // ── Users ────────────────────────────────────────────────────────────────────
 
 export const usersIndex: HandlerModule = {
